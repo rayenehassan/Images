@@ -7,7 +7,9 @@ export const dynamic = 'force-dynamic';
 
 const INPUT_BUCKET = process.env.SUPABASE_INPUT_BUCKET || 'input-images';
 const OUTPUT_BUCKET = process.env.SUPABASE_OUTPUT_BUCKET || 'output-images';
-const MODEL = process.env.REPLICATE_MODEL || 'google/nano-banana';
+// Replicate expects a spec like "owner/model" or "owner/model:version"
+const MODEL = (process.env.REPLICATE_MODEL || 'google/nano-banana') as
+  `${string}/${string}` | `${string}/${string}:${string}`;
 
 export async function POST(request: Request) {
   try {
