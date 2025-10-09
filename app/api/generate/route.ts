@@ -62,7 +62,10 @@ export async function POST(request: Request) {
 
       let output: any;
       try {
-        output = await replicate.run(MODEL, { input: replicateInput } as any);
+        output = await replicate.run(
+          MODEL as `${string}/${string}` | `${string}/${string}:${string}`,
+          { input: replicateInput } as any
+        );
       } catch (e: any) {
         const msg = String(e?.message || 'Erreur Replicate');
         if (msg.includes('402') || msg.toLowerCase().includes('insufficient credit')) {
