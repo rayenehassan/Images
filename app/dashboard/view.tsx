@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import SubscriptionStatus from '@/components/SubscriptionStatus';
 
 type Project = {
   id: string;
@@ -92,12 +93,17 @@ export default function DashboardClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
-          Plan {planLabel} — {Math.max(0, quotaLimit - quotaUsed)}/{quotaLimit} générations restantes ce mois
-        </div>
-        <a className="inline-flex h-10 items-center rounded-md border px-4" href="#" onClick={async (e) => { e.preventDefault(); const r = await fetch('/api/create-portal-session', { method: 'POST' }); const j = await r.json(); if (r.ok) window.location.href = j.url; else alert(j.error || 'Erreur'); }}>Gérer mon abonnement</a>
-      </div>
+      <SubscriptionStatus
+        planLabel={planLabel}
+        quotaLimit={quotaLimit}
+        quotaUsed={quotaUsed}
+        onManage={async () => {
+          const r = await fetch('/api/create-portal-session', { method: 'POST' });
+          const j = await r.json();
+          if (r.ok) window.location.href = j.url; else alert(j.error || 'Erreur');
+        }}
+        onUpgrade={() => { window.location.href = '/pricing'; }}
+      />
       <div className="rounded-xl border bg-card">
         <div className="p-6 border-b"><h1 className="text-2xl font-semibold">Mon tableau de bord</h1><p className="text-sm text-muted-foreground">Générez et gérez vos projets.</p></div>
         <form className="p-6 space-y-4" onSubmit={onSubmit}>
