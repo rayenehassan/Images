@@ -5,5 +5,5 @@ if (!key) {
   throw new Error('STRIPE_SECRET_KEY manquant dans les variables d\'environnement');
 }
 
-export const stripe = new Stripe(key, { apiVersion: '2024-06-20' });
-
+// Use a Stripe API version supported by the installed SDK types
+export const stripe = new Stripe(key, { apiVersion: '2023-10-16' });
