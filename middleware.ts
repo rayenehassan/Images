@@ -12,7 +12,7 @@ export async function middleware(req: NextRequest) {
   );
   const { data: { session } } = await supabase.auth.getSession();
 
-  const protectedPaths = ['/dashboard', '/api/generate', '/api/projects'];
+  const protectedPaths = ['/dashboard', '/api/generate', '/api/projects', '/account'];
   const isProtected = protectedPaths.some((p) => req.nextUrl.pathname === p || req.nextUrl.pathname.startsWith(p + '/'));
 
   if (isProtected && !session) {

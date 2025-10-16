@@ -17,6 +17,24 @@ export async function POST(request: Request) {
     const supabaseUser = supabaseRoute();
     const { data: { session } } = await supabaseUser.auth.getSession();
     if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
+    const userId = session.user.id;
+
+    // Vérifier abonnement/quota
+    const subRes = await supabaseUser
+      .from('subscriptions')
+      .select('status, quota_limit, quota_used')
+      .eq('user_id', userId)
+      .single();
+    if (!subRes.data || subRes.error) {
+      return NextResponse.json({ error: 'Aucun abonnement actif. Veuillez souscrire.' }, { status: 402 });
+    }
+    const { status, quota_limit, quota_used } = subRes.data as any;
+    if (status !== 'active') {
+      return NextResponse.json({ error: 'Abonnement inactif. Veuillez réactiver dans votre compte.' }, { status: 402 });
+    }
+    if (typeof quota_limit === 'number' && typeof quota_used === 'number' && quota_used >= quota_limit) {
+      return NextResponse.json({ error: 'Quota mensuel atteint.' }, { status: 402 });
+    }
     const formData = await request.formData();
     const image = formData.get('image');
     const prompt = String(formData.get('prompt') || '').trim();
@@ -34,7 +52,7 @@ export async function POST(request: Request) {
     const arrayBuffer = await image.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const contentType = image.type || 'application/octet-stream';
-    const inputPath = `input/${id}`;
+    const inputPath = `${userId}/input/${id}`;
 
     const uploadInput = await supabaseAdmin
       .storage
@@ -132,7 +150,7 @@ export async function POST(request: Request) {
     const genBuffer = Buffer.from(genArrayBuffer);
     const outContentType = genRes.headers.get('content-type') || 'image/png';
     const outExt = outContentType.split('/')[1]?.split(';')[0] || 'png';
-    const outputPath = `output/${id}.${outExt}`;
+    const outputPath = `${userId}/output/${id}.${outExt}`;
 
     const uploadOutput = await supabaseAdmin
       .storage
@@ -144,11 +162,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Échec upload image générée.' }, { status: 500 });
     }
 
-    const publicOutput = supabaseAdmin
-      .storage
-      .from(OUTPUT_BUCKET)
-      .getPublicUrl(outputPath);
-    const outputImageUrl = publicOutput.data.publicUrl;
+    const storageOut = supabaseAdmin.storage.from(OUTPUT_BUCKET);
+    const outputSigned = await storageOut.createSignedUrl(outputPath, 3600);
+    const outputImageUrl = outputSigned.data?.signedUrl || '';
 
     // Sauvegarde en base, côté user (RLS)
     const insert = await supabaseUser
@@ -160,6 +176,12 @@ export async function POST(request: Request) {
     if (insert.error) {
       console.error('Erreur insert DB:', insert.error);
     }
+
+    // Incrémenter quota
+    await supabaseUser
+      .from('subscriptions')
+      .update({ quota_used: (quota_used ?? 0) + 1 })
+      .eq('user_id', userId);
 
     return NextResponse.json({ outputImageUrl });
   } catch (err: any) {

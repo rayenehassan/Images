@@ -18,6 +18,7 @@ export default function DashboardClient() {
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [sub, setSub] = useState<any | null>(null);
 
   const refresh = async () => {
     const res = await fetch('/api/projects');
@@ -28,6 +29,10 @@ export default function DashboardClient() {
 
   useEffect(() => {
     refresh();
+    (async () => {
+      const r = await fetch('/api/subscription');
+      if (r.ok) setSub(await r.json());
+    })();
   }, []);
 
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,6 +48,9 @@ export default function DashboardClient() {
     setResultUrl(null);
     if (!file) return setError('Veuillez sélectionner une image.');
     if (!prompt.trim()) return setError('Veuillez saisir un prompt.');
+    if (sub && typeof sub.quota_limit === 'number' && typeof sub.quota_used === 'number' && sub.quota_used >= sub.quota_limit) {
+      return setError('Quota atteint, passez au plan Pro.');
+    }
     setLoading(true);
     try {
       const fd = new FormData();
@@ -60,6 +68,8 @@ export default function DashboardClient() {
       setFile(null);
       setPreviewUrl(null);
       await refresh();
+      const r = await fetch('/api/subscription');
+      if (r.ok) setSub(await r.json());
     } catch (err: any) {
       setError(err?.message || 'Erreur.');
     } finally {
@@ -75,8 +85,19 @@ export default function DashboardClient() {
     }
   };
 
+  const planLabel = sub?.stripe_price_id === process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO ? 'Pro' : sub?.stripe_price_id ? 'Basic' : '—';
+  const quotaLimit = typeof sub?.quota_limit === 'number' ? sub.quota_limit : 0;
+  const quotaUsed = typeof sub?.quota_used === 'number' ? sub.quota_used : 0;
+  const quotaReached = quotaLimit > 0 && quotaUsed >= quotaLimit;
+
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+          Plan {planLabel} — {Math.max(0, quotaLimit - quotaUsed)}/{quotaLimit} générations restantes ce mois
+        </div>
+        <a className="inline-flex h-10 items-center rounded-md border px-4" href="#" onClick={async (e) => { e.preventDefault(); const r = await fetch('/api/create-portal-session', { method: 'POST' }); const j = await r.json(); if (r.ok) window.location.href = j.url; else alert(j.error || 'Erreur'); }}>Gérer mon abonnement</a>
+      </div>
       <div className="rounded-xl border bg-card">
         <div className="p-6 border-b"><h1 className="text-2xl font-semibold">Mon tableau de bord</h1><p className="text-sm text-muted-foreground">Générez et gérez vos projets.</p></div>
         <form className="p-6 space-y-4" onSubmit={onSubmit}>
@@ -92,9 +113,10 @@ export default function DashboardClient() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="inline-flex h-10 items-center rounded-md bg-primary px-5 text-primary-foreground" disabled={loading}>
+            <button className="inline-flex h-10 items-center rounded-md bg-primary px-5 text-primary-foreground" disabled={loading || quotaReached}>
               {loading ? 'Génération…' : 'Générer'}
             </button>
+            {quotaReached && <span className="text-sm text-muted-foreground">Quota atteint, passez au plan Pro</span>}
             {resultUrl && (
               <a className="inline-flex h-10 items-center rounded-md border px-5" href={resultUrl} target="_blank" rel="noreferrer">Voir le résultat</a>
             )}
