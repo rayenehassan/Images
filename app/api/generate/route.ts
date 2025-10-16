@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabaseAdmin';
 import { replicate } from '@/lib/replicate';
+import { supabaseRoute } from '@/lib/supabaseServer';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,9 @@ const MODEL = (process.env.REPLICATE_MODEL || 'google/nano-banana') as
 
 export async function POST(request: Request) {
   try {
+    const supabaseUser = supabaseRoute();
+    const { data: { session } } = await supabaseUser.auth.getSession();
+    if (!session) return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     const formData = await request.formData();
     const image = formData.get('image');
     const prompt = String(formData.get('prompt') || '').trim();
@@ -52,12 +56,16 @@ export async function POST(request: Request) {
     if (process.env.REPLICATE_MOCK === '1') {
       generatedImageUrl = inputImageUrl;
     } else {
-      // Appel conforme à la doc de google/nano-banana
+      // Appel conforme au modèle bytedance/seedream-4
       const replicateInput: Record<string, any> = {
         prompt,
         image_input: [inputImageUrl],
-        aspect_ratio: 'match_input_image',
-        output_format: 'png',
+        size: '2K',
+        width: 2048,
+        height: 2048,
+        max_images: 1,
+        aspect_ratio: '4:3',
+        sequential_image_generation: 'disabled',
       };
 
       let output: any;
@@ -90,7 +98,14 @@ export async function POST(request: Request) {
       }
       if (!generatedImageUrl && Array.isArray(output)) {
         for (const v of output) {
-          if (typeof v === 'string' && v.startsWith('http')) generatedImageUrl = v;
+          if (!generatedImageUrl && v && typeof (v as any).url === 'function') {
+            try { generatedImageUrl = (v as any).url(); } catch {}
+          }
+          if (!generatedImageUrl && typeof v === 'string' && v.startsWith('http')) generatedImageUrl = v;
+          if (!generatedImageUrl && v && typeof v === 'object') {
+            const c = (v as any).image || (v as any).url || (v as any).output;
+            if (typeof c === 'string' && c.startsWith('http')) generatedImageUrl = c;
+          }
         }
       } else if (!generatedImageUrl && typeof output === 'string' && output.startsWith('http')) {
         generatedImageUrl = output;
@@ -135,10 +150,10 @@ export async function POST(request: Request) {
       .getPublicUrl(outputPath);
     const outputImageUrl = publicOutput.data.publicUrl;
 
-    // Sauvegarde en base
-    const insert = await supabaseAdmin
+    // Sauvegarde en base, côté user (RLS)
+    const insert = await supabaseUser
       .from('projects')
-      .insert({ input_image_url: inputImageUrl, output_image_url: outputImageUrl, prompt, status: 'completed' })
+      .insert({ input_image_url: inputImageUrl, output_image_url: outputImageUrl, prompt, status: 'completed', user_id: session.user.id })
       .select()
       .single();
 

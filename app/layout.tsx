@@ -4,6 +4,8 @@ export const metadata = {
 };
 
 import './globals.css';
+import { AuthProvider } from '@/context/AuthContext';
+import AppHeader from '@/components/AppHeader';
 
 export default function RootLayout({
   children,
@@ -12,19 +14,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body>
-        <div className="app-shell">
-          <header className="app-header">
-            <div className="brand">
-              <span className="logo" aria-hidden>◎</span>
-              <span>Studio</span>
-            </div>
-          </header>
-          <main className="app-main">{children}</main>
-          <footer className="app-footer">© {new Date().getFullYear()} Studio — propulsé par IA</footer>
-        </div>
+      <body className="bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900">
+        <AuthProvider>
+          <div className="app-shell">
+            <AppHeader />
+            <main className="app-main">{children}</main>
+            <footer className="app-footer">© {new Date().getFullYear()} Studio — propulsé par IA</footer>
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );
 }
-
